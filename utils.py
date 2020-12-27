@@ -4,50 +4,41 @@ import matplotlib.pyplot as plt
 
 
 # function to plot a single stroke
-def plot_stroke(stroke, label=None):
+def plot_one_stroke(stroke,ax,label=None):
     x,y = np.cumsum(stroke[:,1]), np.cumsum(stroke[:,2])
     x_len = x.max() - x.min()
     y_len = y.max() - y.min()
-    plt.figure(figsize=(2*x_len/y_len,3))
     pen_lifts = np.flatnonzero(stroke[:,0])
     begin = 0
     for idx in pen_lifts:
-        plt.plot(x[begin:idx],y[begin:idx], 'k')
+        ax.plot(x[begin:idx],y[begin:idx], 'k')
         begin = idx + 1
-    if label is not None:
-        plt.title(label,fontsize=15) 
+    if label: ax.set_title(label,fontsize=15)
+    ax.set_axis_off()
+
+def plot_strokes(strokes,labels=None):
+    if strokes.ndim == 2:
+        _,ax = plt.subplots(figsize=(12,2))
+        plot_one_stroke(strokes,ax,labels)
+        return 
+    fig,axs = plt.subplots(nrows=len(strokes),figsize=(12,2*len(strokes)))
+    if not (isinstance(labels,np.ndarray) or isinstance(labels,list)): 
+        labels = [None]*len(strokes)
+    for i,stroke in enumerate(strokes):
+        plot_one_stroke(stroke,axs[i],labels[i])
     plt.tight_layout()
-    plt.axis('off')
-    plt.show()
+
 
 import torch
 from torch.distributions import Categorical, MultivariateNormal
-# Sampling 
 
-def ce_sample(ce,temp=1):
-    ces = Categorical(logits=ce/temp).sample().data
-    return ces.float()
+def check_gpu():
+    if torch.cuda.is_available(): device = torch.device('cuda')
+    else: device = torch.device('cpu')
+    return device
 
-def bivariate_sample(pi,rho,sigma,mu):
-    """Sample from a mixture of bivariate gaussians"""
-    pi,rho,sigma,mu = pi.squeeze(),rho.squeeze(),sigma.squeeze(),mu.squeeze()
-    pis = Categorical(probs=pi.exp()).sample().data
-    bs = torch.arange(sigma.size(0))
-    sample_mu = mu[bs,pis]
-    covar = torch.empty((sigma.size(0),2,2), device=sigma.device)
-    covar[bs,0,0] = sigma[bs,pis,0] ** 2
-    covar[bs,0,1] = rho[bs,pis] * sigma[bs,pis,0] * sigma[bs,pis,1] 
-    covar[bs,1,0] = rho[bs,pis] * sigma[bs,pis,0] * sigma[bs,pis,1] 
-    covar[bs,1,1] = sigma[bs,pis,1] ** 2
-    sample = MultivariateNormal(sample_mu, covar).sample()
-    return sample
+def log_likelihood(target,rho,sigma,mu):
 
-
-def get_probs(target,rho,sigma,mu):
-    # better stability
-    eps = 1e-6
-    rho = rho/(1+eps)
-    sigma = sigma + eps
     const_pi = torch.as_tensor(np.pi, device=mu.device)
 
     diff = target.unsqueeze(-2).expand_as(mu) - mu
@@ -58,3 +49,26 @@ def get_probs(target,rho,sigma,mu):
                     (sigma[...,1]).log() + 0.5*(1-rho**2).log()
     ans = -log_terms + exp_terms
     return  ans
+
+# Sampling 
+def ce_sample(ce,temp=1):
+    ces = Categorical(logits=ce/temp).sample()
+    return ces.float()
+
+def bivariate_sample(params):
+    """Sample from a mixture of bivariate gaussians"""
+    pi,rho,sigma,mu = [p.squeeze(1) for p in params]
+    pis = Categorical(probs=pi.exp()).sample()
+    bs = torch.arange(mu.size(0))
+    sample_mu = mu[bs,pis]
+    covar = torch.empty((bs.size(0),2,2),device=mu.device)
+    covar[bs,0,0] = sigma[bs,pis,0] ** 2
+    covar[bs,0,1] = rho[bs,pis] * sigma[bs,pis,0] * sigma[bs,pis,1] 
+    covar[bs,1,0] = covar[bs,0,1] 
+    covar[bs,1,1] = sigma[bs,pis,1] ** 2
+    sample = MultivariateNormal(sample_mu, covar).sample()
+    return sample
+
+
+
+

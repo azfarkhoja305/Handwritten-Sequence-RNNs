@@ -68,13 +68,14 @@ class MixtureDensity(nn.Module):
 
 
 class FinalActivation(nn.Module):
-    def __init__(self):
+    def __init__(self,beta):
         super().__init__()
         self.softmax = nn.LogSoftmax(dim=-1)
-        self.softplus = nn.Softplus()
+        self.softplus = nn.Softplus(beta=beta)
         self.tanh = nn.Tanh()
-    def forward(self,ce,pi,rho,sigma,mu):
-        pi = self.softmax(pi)
-        rho = self.tanh(rho)
-        sigma = self.softplus(sigma)
+    def forward(self,ce,pi,rho,sigma,mu,bias=0,eps=1e-6):
+        # eps for numerical stability req. for calc. likelihood
+        pi = self.softmax(pi*(1+bias))
+        rho = self.tanh(rho)/(1+eps)
+        sigma = self.softplus(sigma-bias) + eps
         return ce,pi,rho,sigma,mu
