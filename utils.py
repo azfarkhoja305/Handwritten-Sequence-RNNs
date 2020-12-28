@@ -28,6 +28,11 @@ def plot_strokes(strokes,labels=None):
         plot_one_stroke(stroke,axs[i],labels[i])
     plt.tight_layout()
 
+def plot_lr_find(lr_list,loss_list,skip=0):
+    size = len(loss_list) - skip 
+    plt.plot(lr_list[:size],loss_list[:size])
+    plt.xscale('log')
+    plt.show()
 
 import torch
 from torch.distributions import Categorical, MultivariateNormal

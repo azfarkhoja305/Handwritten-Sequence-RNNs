@@ -30,8 +30,9 @@ class InLayer(nn.Module):
 
 
 class RecurLayer(nn.Module):
-    def __init__(self,ip_dims=10,num_layers=2):
+    def __init__(self,ip_dims=10,num_layers=2,drop_p=0):
         super().__init__()
+        self.dropout = nn.Dropout(p=drop_p)
         self.num_layers = num_layers
         self.rnns = nn.ModuleList([nn.LSTM(ip_dims,ip_dims,batch_first=True)])
         for _ in range (num_layers-1):
@@ -43,6 +44,7 @@ class RecurLayer(nn.Module):
         skip_x = x.clone()
         for i in range(self.num_layers):
             new_x,s = self.rnns[i](x,prev_state[i])
+            new_x = self.dropout(new_x)
             cat_xs.append(new_x), new_state.append(s)
             x = torch.cat([skip_x,new_x],2) # skip connection inputs
         return torch.cat(cat_xs, 2), new_state # outputs from all layers
